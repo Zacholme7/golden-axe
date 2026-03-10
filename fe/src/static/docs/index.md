@@ -312,6 +312,7 @@ When requests include a signature and a query, it is assumed that the query is o
 | blocks |
 | txs |
 | logs |
+| receipts |
 
 #### Blocks {#evm-blocks}
 
@@ -325,8 +326,10 @@ Table name: `blocks`
 | size | int4 |
 | gas_limit | numeric |
 | gas_used | numeric |
-| nonce | bytea |
+| base_fee_per_gas | numeric |
 | hash | bytea |
+| parent_hash | bytea |
+| nonce | bytea |
 | receipts_root | bytea |
 | state_root | bytea |
 | extra_data | bytea |
@@ -347,12 +350,34 @@ Table name: `txs`
 | type | int2 |
 | gas | numeric |
 | gas_price | numeric |
+| max_fee_per_gas | numeric |
+| max_priority_fee_per_gas | numeric |
 | nonce | bytea |
 | hash | bytea |
 | from | bytea |
 | to | bytea |
 | input | bytea |
 | value | numeric |
+| fee_token | bytea |
+| calls | jsonb |
+
+`to` is `NULL` for contract creation transactions.
+
+#### Receipts {#evm-receipts}
+
+Table name: `receipts`
+
+| Column | Type |
+|--|--|
+| chain | int8 |
+| block_num | int8 |
+| idx | int4 |
+| tx_hash | bytea |
+| status | bool |
+| gas_used | numeric |
+| cumulative_gas_used | numeric |
+| effective_gas_price | numeric |
+| contract_address | bytea |
 
 #### Logs {#evm-logs}
 

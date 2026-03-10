@@ -56,6 +56,7 @@ struct Args {
 }
 
 static SCHEMA_BE: &str = include_str!("./sql/schema.sql");
+static INDEXES_BE: &str = include_str!("./sql/indexes.sql");
 
 #[tokio::main]
 async fn main() {
@@ -85,6 +86,14 @@ async fn main() {
         .batch_execute(SCHEMA_BE)
         .await
         .expect("updating backend schema");
+    config
+        .be_pool
+        .get()
+        .await
+        .expect("backend pool")
+        .batch_execute(INDEXES_BE)
+        .await
+        .expect("updating backend indexes");
 
     let listener = tokio::net::TcpListener::bind(&args.listen)
         .await
@@ -92,10 +101,21 @@ async fn main() {
 
     tokio::spawn(account_limits(config.clone()));
     tokio::spawn(stats_updates(config.clone()));
+    tokio::spawn(bootstrap_erc20_transfers(config.clone()));
     tokio::spawn(sync(args.clone(), config.clone()));
     axum::serve(listener, service(config.clone()))
         .await
         .expect("serving api");
+}
+
+async fn bootstrap_erc20_transfers(config: api::Config) {
+    let result = tokio::spawn(async move { sync::bootstrap_erc20_transfers(&config.be_pool).await })
+        .await;
+    match result {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => tracing::error!("erc20 bootstrap error: {}", error),
+        Err(error) => tracing::error!("erc20 bootstrap join error: {}", error),
+    }
 }
 
 async fn sync(args: Args, config: api::Config) {
@@ -262,6 +282,7 @@ mod tests {
                 transactions: vec![],
                 gas_limit: U256::from(1),
                 gas_used: U256::from(1),
+                base_fee_per_gas: None,
                 logs_bloom: FixedBytes::<256>::with_last_byte(0x00),
                 receipts_root: B256::with_last_byte(0x01),
                 state_root: B256::with_last_byte(0x01),

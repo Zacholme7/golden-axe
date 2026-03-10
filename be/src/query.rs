@@ -823,17 +823,31 @@ fn base_column_type(id: &Ident) -> Option<ast::DataType> {
 
         // Blocks
         "num" | "size" => Some(ast::DataType::Int64),
-        "receipts_root" | "state_root" | "extra_data" | "miner" => Some(ast::DataType::Bytea),
+        "parent_hash" | "receipts_root" | "state_root" | "extra_data" | "miner" => {
+            Some(ast::DataType::Bytea)
+        }
 
         "timestamp" => Some(ast::DataType::Timestamp(None, ast::TimezoneInfo::Tz)),
-        "gas_limit" | "gas_used" => Some(ast::DataType::Numeric(ast::ExactNumberInfo::None)),
+        "gas_limit"
+        | "gas_used"
+        | "base_fee_per_gas"
+        | "cumulative_gas_used"
+        | "effective_gas_price" => {
+            Some(ast::DataType::Numeric(ast::ExactNumberInfo::None))
+        }
 
         // Txs
         "idx" | "type" => Some(ast::DataType::Int64),
         "from" | "to" | "input" | "fee_token" => Some(ast::DataType::Bytea),
         "value" => Some(ast::DataType::Numeric(ast::ExactNumberInfo::None)),
-        "gas" | "gas_price" => Some(ast::DataType::Numeric(ast::ExactNumberInfo::None)),
+        "gas" | "gas_price" | "max_fee_per_gas" | "max_priority_fee_per_gas" => {
+            Some(ast::DataType::Numeric(ast::ExactNumberInfo::None))
+        }
         "calls" => Some(ast::DataType::JSONB),
+
+        // Receipts
+        "status" => Some(ast::DataType::Bool),
+        "contract_address" => Some(ast::DataType::Bytea),
 
         // Logs
         "tx_hash" | "address" | "topics" | "data" => Some(ast::DataType::Bytea),

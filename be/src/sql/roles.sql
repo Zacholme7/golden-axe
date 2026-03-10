@@ -12,6 +12,11 @@ revoke execute on all functions in schema public from uapi;
 grant select on logs TO uapi;
 grant select on txs TO uapi;
 grant select on blocks TO uapi;
+grant select on receipts TO uapi;
+grant select on erc20_transfers TO uapi;
+grant select on default_address_labels TO uapi;
+grant select on verified_contracts TO uapi;
+grant select on verified_contract_files TO uapi;
 
 alter role uapi set statement_timeout = '30s';
 alter role uapi set work_mem = '1GB';

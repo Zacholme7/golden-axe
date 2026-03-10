@@ -8,8 +8,10 @@ create table if not exists blocks(
 
     gas_limit numeric not null,
     gas_used numeric not null,
+    base_fee_per_gas numeric,
     nonce bytea not null,
     hash bytea not null,
+    parent_hash bytea not null,
     receipts_root bytea not null,
     state_root bytea not null,
     extra_data bytea not null,
@@ -25,10 +27,12 @@ create table if not exists txs (
 
     gas numeric not null,
     gas_price numeric not null,
+    max_fee_per_gas numeric,
+    max_priority_fee_per_gas numeric,
     nonce bytea not null,
     hash bytea not null,
     "from" bytea not null,
-    "to" bytea not null,
+    "to" bytea,
     input bytea not null,
     value numeric not null,
     fee_token bytea,
@@ -46,6 +50,36 @@ create table if not exists logs (
     topics bytea[] not null,
     data bytea not null
 ) partition by list(chain);
+
+create table if not exists receipts (
+    chain int8 not null,
+    block_num int8 not null,
+    idx int4 not null,
+    tx_hash bytea not null,
+    status bool,
+    gas_used numeric not null,
+    cumulative_gas_used numeric not null,
+    effective_gas_price numeric,
+    contract_address bytea
+) partition by list(chain);
+
+create table if not exists erc20_transfers (
+    chain int8 not null,
+    block_num int8 not null,
+    block_timestamp timestamptz not null,
+    log_idx int4 not null,
+    tx_hash bytea not null,
+    token_address bytea not null,
+    "from" bytea not null,
+    "to" bytea not null,
+    amount numeric not null
+) partition by list(chain);
+
+alter table blocks add column if not exists parent_hash bytea;
+alter table blocks add column if not exists base_fee_per_gas numeric;
+alter table txs alter column "to" drop not null;
+alter table txs add column if not exists max_fee_per_gas numeric;
+alter table txs add column if not exists max_priority_fee_per_gas numeric;
 
 create or replace function b2i(data bytea) returns int4 as $$
 declare

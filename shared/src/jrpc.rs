@@ -41,6 +41,25 @@ pub struct Log {
     pub data: Bytes,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct Receipt {
+    #[serde(rename = "transactionHash")]
+    pub tx_hash: FixedBytes<32>,
+    #[serde(rename = "transactionIndex")]
+    pub idx: U64,
+    #[serde(rename = "blockNumber")]
+    pub block_number: U64,
+    pub status: Option<U64>,
+    #[serde(rename = "gasUsed")]
+    pub gas_used: U256,
+    #[serde(rename = "cumulativeGasUsed")]
+    pub cumulative_gas_used: U256,
+    #[serde(rename = "effectiveGasPrice")]
+    pub effective_gas_price: Option<U256>,
+    #[serde(rename = "contractAddress")]
+    pub contract_address: Option<Address>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Call {
     pub from: Option<Address>,
@@ -69,6 +88,10 @@ pub struct Tx {
     pub gas: U256,
     #[serde(rename = "gasPrice")]
     pub gas_price: Option<U256>,
+    #[serde(rename = "maxFeePerGas")]
+    pub max_fee_per_gas: Option<U256>,
+    #[serde(rename = "maxPriorityFeePerGas")]
+    pub max_priority_fee_per_gas: Option<U256>,
     pub calls: Option<Vec<Call>>,
     #[serde(rename = "feeToken")]
     pub fee_token: Option<Address>,
@@ -88,6 +111,8 @@ pub struct Block {
     pub gas_limit: U256,
     #[serde(rename = "gasUsed")]
     pub gas_used: U256,
+    #[serde(rename = "baseFeePerGas")]
+    pub base_fee_per_gas: Option<U256>,
     #[serde(rename = "logsBloom")]
     pub logs_bloom: FixedBytes<256>,
     #[serde(rename = "receiptsRoot")]
@@ -110,6 +135,19 @@ pub struct Client {
 enum RpcEither<T> {
     Ok { result: T },
     Err { error: Error },
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum RpcWithId<T> {
+    Ok {
+        id: u64,
+        result: T,
+    },
+    Err {
+        id: u64,
+        error: Error,
+    },
 }
 
 impl Client {
@@ -268,6 +306,72 @@ impl Client {
             RpcEither::Ok { result, .. } => Ok(result),
             RpcEither::Err { error, .. } => Err(error),
         }
+    }
+
+    #[tracing::instrument(level="info" skip_all, fields(receipts = tx_hashes.len()))]
+    pub async fn receipts(&self, tx_hashes: &[BlockHash]) -> Result<Vec<Receipt>, Error> {
+        if tx_hashes.is_empty() {
+            return Ok(vec![]);
+        }
+        let request: Vec<_> = tx_hashes
+            .iter()
+            .enumerate()
+            .map(|(id, tx_hash)| {
+                serde_json::json!({
+                    "id": id,
+                    "jsonrpc": "2.0",
+                    "method": "eth_getTransactionReceipt",
+                    "params": [tx_hash],
+                })
+            })
+            .collect();
+        let response_body = self
+            .http_client
+            .post(&self.url)
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| Error {
+                code: -1,
+                message: format!("decoding receipts: {e:?}"),
+            })?
+            .text()
+            .await
+            .map_err(|e| Error {
+                code: -1,
+                message: format!("decoding receipts json: {e:?}"),
+            })?;
+        let response: Vec<RpcWithId<Option<Receipt>>> =
+            serde_json::from_str(&response_body).map_err(|e| Error {
+                code: -1,
+                message: format!("decode error: {e:?}\n{}\n", response_body),
+            })?;
+        let mut by_id: Vec<Option<Receipt>> =
+            std::iter::repeat_with(|| None).take(tx_hashes.len()).collect();
+        for item in response {
+            match item {
+                RpcWithId::Ok { id, result } => {
+                    let slot = by_id.get_mut(id as usize).ok_or_else(|| Error {
+                        code: -1,
+                        message: format!("unexpected receipt response id {id}"),
+                    })?;
+                    *slot = result;
+                }
+                RpcWithId::Err { id, error } => {
+                    tracing::debug!("receipt error response id={id} message={}", error.message);
+                    return Err(error);
+                }
+            }
+        }
+        by_id.into_iter()
+            .enumerate()
+            .map(|(id, maybe_receipt)| {
+                maybe_receipt.ok_or_else(|| Error {
+                    code: -1,
+                    message: format!("no result for tx receipt request {id}"),
+                })
+            })
+            .collect()
     }
 }
 
