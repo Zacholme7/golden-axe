@@ -10,6 +10,10 @@ create index if not exists txs_block on txs(block_num);
 create index if not exists txs_hash on txs(hash);
 create index if not exists txs_from on txs("from");
 create index if not exists txs_to on txs("to");
+create index if not exists txs_chain_from_block_idx
+on txs(chain, "from", block_num desc, idx desc, hash desc);
+create index if not exists txs_chain_to_block_idx
+on txs(chain, "to", block_num desc, idx desc, hash desc);
 create index if not exists txs_calls on txs using gin (calls);
 
 create index if not exists txs_selector
